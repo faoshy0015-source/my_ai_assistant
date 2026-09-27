@@ -26,6 +26,27 @@ st.caption("미국증시 + 한국증시 + 관심종목 + 시장 브리핑")
 
 
 # ==================================================
+# 비밀키 읽기
+# PC에서는 .env
+# Streamlit Cloud에서는 Secrets
+# ==================================================
+
+def get_secret(name):
+
+    # 1. PC의 .env 또는 환경변수
+    value = os.getenv(name)
+
+    if value:
+        return value
+
+    # 2. Streamlit Cloud Secrets
+    try:
+        return st.secrets[name]
+    except Exception:
+        return None
+
+
+# ==================================================
 # 한국투자증권
 # ==================================================
 
@@ -35,8 +56,8 @@ KIS_BASE_URL = "https://openapi.koreainvestment.com:9443"
 @st.cache_resource(ttl=21600)
 def get_kis_token():
 
-    app_key = os.getenv("KIS_APP_KEY")
-    app_secret = os.getenv("KIS_APP_SECRET")
+    app_key = get_secret("KIS_APP_KEY")
+    app_secret = get_secret("KIS_APP_SECRET")
 
     if not app_key or not app_secret:
         return None
@@ -81,8 +102,8 @@ def get_kis_token():
 @st.cache_data(ttl=60)
 def get_kis_stock_price(stock_code):
 
-    app_key = os.getenv("KIS_APP_KEY")
-    app_secret = os.getenv("KIS_APP_SECRET")
+    app_key = get_secret("KIS_APP_KEY")
+    app_secret = get_secret("KIS_APP_SECRET")
 
     if not app_key or not app_secret:
         return None
@@ -303,10 +324,6 @@ def analyze_news(title, description=""):
 
     score = 0
 
-    # ----------------------------------------------
-    # 영향도가 큰 시장 키워드
-    # ----------------------------------------------
-
     high_keywords = [
         "금리",
         "연준",
@@ -353,11 +370,6 @@ def analyze_news(title, description=""):
         if keyword in text:
             score += 1
 
-
-    # ----------------------------------------------
-    # 관련 업종 / 종목
-    # ----------------------------------------------
-
     related = []
 
     if any(
@@ -377,7 +389,6 @@ def analyze_news(title, description=""):
             "SK하이닉스"
         ]
 
-
     if any(
         keyword in text
         for keyword in [
@@ -391,7 +402,6 @@ def analyze_news(title, description=""):
             "효성중공업",
             "HD현대일렉트릭"
         ]
-
 
     if any(
         keyword in text
@@ -408,7 +418,6 @@ def analyze_news(title, description=""):
             "삼성SDI"
         ]
 
-
     if any(
         keyword in text
         for keyword in [
@@ -422,7 +431,6 @@ def analyze_news(title, description=""):
             "KB금융",
             "하나금융지주"
         ]
-
 
     if any(
         keyword in text
@@ -438,7 +446,6 @@ def analyze_news(title, description=""):
             "LIG넥스원"
         ]
 
-
     if any(
         keyword in text
         for keyword in [
@@ -452,7 +459,6 @@ def analyze_news(title, description=""):
             "현대차"
         ]
 
-
     if any(
         keyword in text
         for keyword in [
@@ -465,15 +471,7 @@ def analyze_news(title, description=""):
             "NAVER"
         ]
 
-
-    # 중복 제거
-
     related = list(dict.fromkeys(related))
-
-
-    # ----------------------------------------------
-    # 영향도
-    # ----------------------------------------------
 
     if score >= 8:
 
@@ -490,11 +488,6 @@ def analyze_news(title, description=""):
     else:
 
         level = "🟢 낮음"
-
-
-    # ----------------------------------------------
-    # 핵심 내용
-    # ----------------------------------------------
 
     clean_description = (
         description
@@ -515,11 +508,6 @@ def analyze_news(title, description=""):
         clean_description = (
             "기사 제목을 중심으로 시장 관련성을 분석했습니다."
         )
-
-
-    # ----------------------------------------------
-    # 한국증시 영향
-    # ----------------------------------------------
 
     if any(
         keyword in text
@@ -595,7 +583,6 @@ def analyze_news(title, description=""):
             "시장 관련 뉴스입니다."
         )
 
-
     return {
         "score": score,
         "level": level,
@@ -643,7 +630,6 @@ def create_market_briefing():
             f"({dow['change_rate']:+.2f}%)"
         )
 
-
     lines.append("")
     lines.append("### 📌 시장 흐름")
 
@@ -674,7 +660,6 @@ def create_market_briefing():
             lines.append(
                 "미국 주요 지수의 방향이 엇갈리고 있습니다."
             )
-
 
     lines.append("")
     lines.append("### 🇰🇷 한국증시 연결 포인트")
@@ -832,7 +817,6 @@ if not df.empty:
 
         selected = option_map[selected_label]
 
-
     with right_col:
 
         st.markdown(
@@ -866,7 +850,6 @@ if not df.empty:
                 "등락률",
                 f"{selected['등락률']:+.2f}%"
             )
-
 
         chart = get_chart_data(
             selected["티커"],
@@ -915,7 +898,6 @@ if not df.empty:
             use_container_width=True,
             hide_index=True
         )
-
 
     st.subheader("📉 하락 종목")
 
@@ -1015,11 +997,6 @@ if news_button:
         "한국증시 영향도가 높은 순서로 정렬합니다."
     )
 
-
-    # ----------------------------------------------
-    # 뉴스 검색
-    # ----------------------------------------------
-
     us_news = get_news(
         "미국 증시 반도체 AI 금리 유가 미중",
         10
@@ -1030,16 +1007,10 @@ if news_button:
         10
     )
 
-
     all_news = (
         us_news +
         kr_news
     )
-
-
-    # ----------------------------------------------
-    # 중복 제거
-    # ----------------------------------------------
 
     unique_news = {}
 
@@ -1051,15 +1022,9 @@ if news_button:
 
             unique_news[title] = news
 
-
     all_news = list(
         unique_news.values()
     )
-
-
-    # ----------------------------------------------
-    # 영향도 분석
-    # ----------------------------------------------
 
     analyzed_news = []
 
@@ -1079,20 +1044,10 @@ if news_button:
             news_item
         )
 
-
-    # ----------------------------------------------
-    # 영향도 높은 순 정렬
-    # ----------------------------------------------
-
     analyzed_news.sort(
         key=lambda x: x["score"],
         reverse=True
     )
-
-
-    # ----------------------------------------------
-    # 뉴스 출력
-    # ----------------------------------------------
 
     if analyzed_news:
 
@@ -1110,9 +1065,6 @@ if news_button:
                 f"### {news['title']}"
             )
 
-
-            # 핵심 내용
-
             st.markdown(
                 "**🔎 핵심 내용**"
             )
@@ -1121,9 +1073,6 @@ if news_button:
                 news["summary"]
             )
 
-
-            # 한국증시 영향
-
             st.markdown(
                 "**🇰🇷 한국증시 영향**"
             )
@@ -1131,9 +1080,6 @@ if news_button:
             st.write(
                 news["impact"]
             )
-
-
-            # 관련 종목
 
             st.markdown(
                 "**🎯 관련 종목**"
@@ -1154,9 +1100,6 @@ if news_button:
                 st.info(
                     "직접적인 관련 종목을 특정하기 어렵습니다."
                 )
-
-
-            # 원문
 
             st.markdown(
                 f"[📰 원문 기사 보기]({news['link']})"
