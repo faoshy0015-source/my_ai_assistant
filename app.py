@@ -5,8 +5,20 @@ import os
 import pandas as pd
 import xml.etree.ElementTree as ET
 
+from openai import OpenAI
 from urllib.parse import quote
 from dotenv import load_dotenv
+
+def get_secret(name):
+    value = os.getenv(name)
+
+    if value:
+        return value
+
+    try:
+        return st.secrets[name]
+    except Exception:
+        return None
 
 
 # ==================================================
@@ -26,27 +38,6 @@ st.caption("미국증시 + 한국증시 + 관심종목 + 시장 브리핑")
 
 
 # ==================================================
-# 비밀키 읽기
-# PC에서는 .env
-# Streamlit Cloud에서는 Secrets
-# ==================================================
-
-def get_secret(name):
-
-    # 1. PC의 .env 또는 환경변수
-    value = os.getenv(name)
-
-    if value:
-        return value
-
-    # 2. Streamlit Cloud Secrets
-    try:
-        return st.secrets[name]
-    except Exception:
-        return None
-
-
-# ==================================================
 # 한국투자증권
 # ==================================================
 
@@ -56,8 +47,8 @@ KIS_BASE_URL = "https://openapi.koreainvestment.com:9443"
 @st.cache_resource(ttl=21600)
 def get_kis_token():
 
-    app_key = get_secret("KIS_APP_KEY")
-    app_secret = get_secret("KIS_APP_SECRET")
+    app_key = os.getenv("KIS_APP_KEY")
+    app_secret = os.getenv("KIS_APP_SECRET")
 
     if not app_key or not app_secret:
         return None
@@ -102,8 +93,8 @@ def get_kis_token():
 @st.cache_data(ttl=60)
 def get_kis_stock_price(stock_code):
 
-    app_key = get_secret("KIS_APP_KEY")
-    app_secret = get_secret("KIS_APP_SECRET")
+    app_key = os.getenv("KIS_APP_KEY")
+    app_secret = os.getenv("KIS_APP_SECRET")
 
     if not app_key or not app_secret:
         return None
@@ -324,6 +315,10 @@ def analyze_news(title, description=""):
 
     score = 0
 
+    # ----------------------------------------------
+    # 영향도가 큰 시장 키워드
+    # ----------------------------------------------
+
     high_keywords = [
         "금리",
         "연준",
@@ -370,6 +365,11 @@ def analyze_news(title, description=""):
         if keyword in text:
             score += 1
 
+
+    # ----------------------------------------------
+    # 관련 업종 / 종목
+    # ----------------------------------------------
+
     related = []
 
     if any(
@@ -389,6 +389,7 @@ def analyze_news(title, description=""):
             "SK하이닉스"
         ]
 
+
     if any(
         keyword in text
         for keyword in [
@@ -402,6 +403,7 @@ def analyze_news(title, description=""):
             "효성중공업",
             "HD현대일렉트릭"
         ]
+
 
     if any(
         keyword in text
@@ -418,6 +420,7 @@ def analyze_news(title, description=""):
             "삼성SDI"
         ]
 
+
     if any(
         keyword in text
         for keyword in [
@@ -431,6 +434,7 @@ def analyze_news(title, description=""):
             "KB금융",
             "하나금융지주"
         ]
+
 
     if any(
         keyword in text
@@ -446,6 +450,7 @@ def analyze_news(title, description=""):
             "LIG넥스원"
         ]
 
+
     if any(
         keyword in text
         for keyword in [
@@ -459,6 +464,7 @@ def analyze_news(title, description=""):
             "현대차"
         ]
 
+
     if any(
         keyword in text
         for keyword in [
@@ -471,7 +477,15 @@ def analyze_news(title, description=""):
             "NAVER"
         ]
 
+
+    # 중복 제거
+
     related = list(dict.fromkeys(related))
+
+
+    # ----------------------------------------------
+    # 영향도
+    # ----------------------------------------------
 
     if score >= 8:
 
@@ -488,6 +502,11 @@ def analyze_news(title, description=""):
     else:
 
         level = "🟢 낮음"
+
+
+    # ----------------------------------------------
+    # 핵심 내용
+    # ----------------------------------------------
 
     clean_description = (
         description
@@ -508,6 +527,11 @@ def analyze_news(title, description=""):
         clean_description = (
             "기사 제목을 중심으로 시장 관련성을 분석했습니다."
         )
+
+
+    # ----------------------------------------------
+    # 한국증시 영향
+    # ----------------------------------------------
 
     if any(
         keyword in text
@@ -583,6 +607,7 @@ def analyze_news(title, description=""):
             "시장 관련 뉴스입니다."
         )
 
+
     return {
         "score": score,
         "level": level,
@@ -630,6 +655,7 @@ def create_market_briefing():
             f"({dow['change_rate']:+.2f}%)"
         )
 
+
     lines.append("")
     lines.append("### 📌 시장 흐름")
 
@@ -660,6 +686,7 @@ def create_market_briefing():
             lines.append(
                 "미국 주요 지수의 방향이 엇갈리고 있습니다."
             )
+
 
     lines.append("")
     lines.append("### 🇰🇷 한국증시 연결 포인트")
@@ -817,6 +844,7 @@ if not df.empty:
 
         selected = option_map[selected_label]
 
+
     with right_col:
 
         st.markdown(
@@ -850,6 +878,7 @@ if not df.empty:
                 "등락률",
                 f"{selected['등락률']:+.2f}%"
             )
+
 
         chart = get_chart_data(
             selected["티커"],
@@ -898,6 +927,7 @@ if not df.empty:
             use_container_width=True,
             hide_index=True
         )
+
 
     st.subheader("📉 하락 종목")
 
@@ -997,6 +1027,11 @@ if news_button:
         "한국증시 영향도가 높은 순서로 정렬합니다."
     )
 
+
+    # ----------------------------------------------
+    # 뉴스 검색
+    # ----------------------------------------------
+
     us_news = get_news(
         "미국 증시 반도체 AI 금리 유가 미중",
         10
@@ -1007,10 +1042,16 @@ if news_button:
         10
     )
 
+
     all_news = (
         us_news +
         kr_news
     )
+
+
+    # ----------------------------------------------
+    # 중복 제거
+    # ----------------------------------------------
 
     unique_news = {}
 
@@ -1022,9 +1063,15 @@ if news_button:
 
             unique_news[title] = news
 
+
     all_news = list(
         unique_news.values()
     )
+
+
+    # ----------------------------------------------
+    # 영향도 분석
+    # ----------------------------------------------
 
     analyzed_news = []
 
@@ -1044,10 +1091,20 @@ if news_button:
             news_item
         )
 
+
+    # ----------------------------------------------
+    # 영향도 높은 순 정렬
+    # ----------------------------------------------
+
     analyzed_news.sort(
         key=lambda x: x["score"],
         reverse=True
     )
+
+
+    # ----------------------------------------------
+    # 뉴스 출력
+    # ----------------------------------------------
 
     if analyzed_news:
 
@@ -1065,6 +1122,9 @@ if news_button:
                 f"### {news['title']}"
             )
 
+
+            # 핵심 내용
+
             st.markdown(
                 "**🔎 핵심 내용**"
             )
@@ -1073,6 +1133,9 @@ if news_button:
                 news["summary"]
             )
 
+
+            # 한국증시 영향
+
             st.markdown(
                 "**🇰🇷 한국증시 영향**"
             )
@@ -1080,6 +1143,9 @@ if news_button:
             st.write(
                 news["impact"]
             )
+
+
+            # 관련 종목
 
             st.markdown(
                 "**🎯 관련 종목**"
@@ -1101,6 +1167,9 @@ if news_button:
                     "직접적인 관련 종목을 특정하기 어렵습니다."
                 )
 
+
+            # 원문
+
             st.markdown(
                 f"[📰 원문 기사 보기]({news['link']})"
             )
@@ -1116,15 +1185,151 @@ if news_button:
 
 
 # ==================================================
-# AI 분석
+# AI 비서
 # ==================================================
 
-st.subheader("🤖 AI 시장 분석")
+st.divider()
 
-st.info(
-    "현재는 OpenAI API 크레딧 없이 사용할 수 있는 "
-    "시장 데이터와 뉴스 분석 기능을 구축하고 있습니다."
-)
+st.subheader("🤖 Lewis와 대화하기")
+
+openai_api_key = get_secret("OPENAI_API_KEY")
+
+if not openai_api_key:
+
+    st.warning(
+        "OPENAI_API_KEY가 설정되어 있지 않습니다."
+    )
+
+else:
+
+    client = OpenAI(
+        api_key=openai_api_key
+    )
+
+    if "messages" not in st.session_state:
+
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    "안녕하세요. 저는 Lewis AI 투자 비서입니다. 🤖\n\n"
+                    "미국증시, 한국증시, 관심종목, 뉴스에 대해 "
+                    "궁금한 것을 물어보세요."
+                )
+            }
+        ]
+
+    for message in st.session_state.messages:
+
+        with st.chat_message(message["role"]):
+
+            st.markdown(
+                message["content"]
+            )
+
+    user_question = st.chat_input(
+        "Lewis에게 물어보세요..."
+    )
+
+    if user_question:
+
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": user_question
+            }
+        )
+
+        with st.chat_message("user"):
+
+            st.markdown(
+                user_question
+            )
+
+        # 현재 시장 데이터 만들기
+
+        market_context = create_market_briefing()
+
+        # 관심종목 데이터
+
+        watchlist_context = ""
+
+        if not df.empty:
+
+            for _, row in df.iterrows():
+
+                watchlist_context += (
+                    f"{row['시장']} "
+                    f"{row['종목']} "
+                    f"현재가 {row['현재가']} "
+                    f"등락률 {row['등락률']:+.2f}%\n"
+                )
+
+        system_prompt = f"""
+너는 사용자의 개인 AI 투자 비서인 Lewis다.
+
+사용자에게 친절하고 쉽게 설명한다.
+
+현재 대시보드에서 확인된 시장 데이터:
+
+{market_context}
+
+현재 관심종목:
+
+{watchlist_context}
+
+사용자의 질문에 위 데이터를 참고하여 답변한다.
+
+중요한 원칙:
+
+1. 확인되지 않은 현재 가격이나 뉴스를 만들어내지 않는다.
+2. 투자 판단을 강요하지 않는다.
+3. 상승 가능성이나 하락 가능성을 말할 때는
+   근거와 불확실성을 함께 설명한다.
+4. 사용자가 초보자라도 이해하기 쉽게 설명한다.
+5. 질문과 관계없는 이야기는 하지 않는다.
+6. 주식 질문에서는 미국시장과 한국시장의 연결관계를
+   가능한 경우 설명한다.
+"""
+
+        conversation = [
+            {
+                "role": "system",
+                "content": system_prompt
+            }
+        ]
+
+        conversation.extend(
+            st.session_state.messages[-10:]
+        )
+
+        try:
+
+            with st.chat_message("assistant"):
+
+                with st.spinner("Lewis가 생각하고 있습니다..."):
+
+                    response = client.chat.completions.create(
+                        model="gpt-5-mini",
+                        messages=conversation
+                    )
+
+                    answer = response.choices[0].message.content
+
+                    st.markdown(answer)
+
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": answer
+                }
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"AI 응답 중 오류가 발생했습니다: {e}"
+            )
 
 
 # ==================================================
